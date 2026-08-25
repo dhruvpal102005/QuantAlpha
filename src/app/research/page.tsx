@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { SignalItem, SignalCategory } from "../../types/quant";
-import { INITIAL_CANDIDATE_SIGNALS, INITIAL_VALIDATED_SIGNALS } from "../../services/quantApi";
+import { fetchSignals } from "../../services/quantApi";
 import { useLiveMarket } from "../../hooks/useLiveMarket";
 
 interface DiscoveryLogLine {
@@ -15,8 +15,8 @@ interface DiscoveryLogLine {
 
 export default function Research() {
   const liveMarket = useLiveMarket();
-  const [candidates, setCandidates] = useState<SignalItem[]>(INITIAL_CANDIDATE_SIGNALS);
-  const [validated, setValidated] = useState<SignalItem[]>(INITIAL_VALIDATED_SIGNALS);
+  const [candidates, setCandidates] = useState<SignalItem[]>([]);
+  const [validated, setValidated] = useState<SignalItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<SignalCategory | "All">("All");
   const [isValidating, setIsValidating] = useState(false);
@@ -50,9 +50,12 @@ export default function Research() {
       setDiscoveryLog(prev => [...prev, { id, type, message, timestamp }]);
     };
 
-    addLine("info", "Connecting to Signal Discovery Engine...");
+    addLine("info", "Loading persisted signals and connecting to Discovery Engine...");
 
     try {
+      const catalog = await fetchSignals();
+      setCandidates(catalog.candidates);
+      setValidated(catalog.validated);
       const es = new EventSource(
         "http://127.0.0.1:8000/api/v1/signals/discover/stream?start_date=2021-01-01&end_date=2024-12-31"
       );
@@ -93,26 +96,8 @@ export default function Research() {
       };
 
       es.onerror = () => {
-        addLine("error", "Backend not reachable — running local signal simulation...");
-        // Simulate discovery locally as fallback
-        const simulatedSignals = [
-          { name: "MOM_CROSS_V4", dsr: 0.96, pbo: 0.12, sharpe: 1.84, type: "success" as const,
-            msg: "[1/3] ✓ APPROVED: MOM_CROSS_V4 | OOS Sharpe=1.84 | DSR=0.960 | PBO=0.120 | CPCV paths: 4/5 profitable" },
-          { name: "PAIR_COINT_ARB", dsr: 0.94, pbo: 0.14, sharpe: 1.92, type: "success" as const,
-            msg: "[2/3] ✓ APPROVED: PAIR_COINT_ARB | OOS Sharpe=1.92 | DSR=0.940 | PBO=0.140 | CPCV paths: 3/5 profitable" },
-          { name: "MACRO_YIELD_CURVE", dsr: 0.88, pbo: 0.52, sharpe: 0.72, type: "rejected" as const,
-            msg: "[3/3] ✗ REJECTED: MACRO_YIELD_CURVE | PBO=0.520 ≥ 0.50 (overfit risk) | DSR=0.880 ≤ 0.90 (low reliability)" },
-        ];
-        let delay = 1200;
-        simulatedSignals.forEach((sig) => {
-          setTimeout(() => addLine(sig.type, sig.msg), delay);
-          delay += 1500;
-        });
-        setTimeout(() => {
-          addLine("complete", "Discovery pipeline complete. 2/3 signals approved. Promoting to candidate board...");
-          setDiscoveryComplete(true);
-          setIsDiscovering(false);
-        }, delay + 500);
+        addLine("error", "Discovery unavailable. No synthetic signals were generated.");
+        setIsDiscovering(false);
         es.close();
       };
     } catch (e) {
@@ -150,7 +135,7 @@ export default function Research() {
       setValidationStep("Testing strategy reliability...");
       
       const { runRealValidation } = await import("../../services/quantApi");
-      const result = await runRealValidation(topCandidate.id, 5, 0.01, 50);
+      const result = await runRealValidation(topCandidate.id, "^NSEI", "2020-01-01", "2024-12-31", 5, 0.01, 50);
 
       if (result.status === "APPROVED") {
         // Graduate to validated
@@ -369,10 +354,14 @@ export default function Research() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-[#f8f8f6] border border-[#e5e5df] p-3 rounded-lg">
                     <span className="text-xs text-stone-500 font-semibold block mb-1" title="Probability strategy is overfit to past data">Overfitting Risk</span>
-                    <span className="font-mono text-lg font-bold text-stone-900">{(inspectingSignal.pbo * 100).toFixed(0)}%</span>
-                    <span className={`ml-2 text-xs font-semibold ${inspectingSignal.pbo <= 0.5 ? "text-emerald-600" : "text-rose-600"}`}>
-                      {inspectingSignal.pbo <= 0.5 ? "✓ SAFE" : "✗ RISKY"}
+                    <span className="font-mono text-lg font-bold text-stone-900">
+                      {inspectingSignal.pbo === null ? "Unavailable" : `${(inspectingSignal.pbo * 100).toFixed(0)}%`}
                     </span>
+                    {inspectingSignal.pbo !== null && (
+                      <span className={`ml-2 text-xs font-semibold ${inspectingSignal.pbo <= 0.5 ? "text-emerald-600" : "text-rose-600"}`}>
+                        {inspectingSignal.pbo <= 0.5 ? "✓ SAFE" : "✗ RISKY"}
+                      </span>
+                    )}
                   </div>
                   <div className="bg-[#f8f8f6] border border-[#e5e5df] p-3 rounded-lg">
                     <span className="text-xs text-stone-500 font-semibold block mb-1">Current Status</span>

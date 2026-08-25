@@ -11,7 +11,7 @@ import {
 } from "../../types/quant";
 import { 
   DEFAULT_BACKTEST_CONFIG, 
-  INITIAL_BACKTEST_RESULT, 
+  EMPTY_BACKTEST_RESULT, 
   runBacktestSimulation, 
   exportBacktestCSV 
 } from "../../services/quantApi";
@@ -20,13 +20,13 @@ import { useLiveMarket } from "../../hooks/useLiveMarket";
 export default function Backtests() {
   const liveMarket = useLiveMarket();
   const [config, setConfig] = useState<BacktestConfig>(DEFAULT_BACKTEST_CONFIG);
-  const [result, setResult] = useState<BacktestResult>(INITIAL_BACKTEST_RESULT);
+  const [result, setResult] = useState<BacktestResult>(EMPTY_BACKTEST_RESULT);
   const [isRunning, setIsRunning] = useState(false);
   const [chartMode, setChartMode] = useState<"linear" | "log">("linear");
   const [newUniverseInput, setNewUniverseInput] = useState("");
 
   // Animated equity curve state
-  const [animatedCurve, setAnimatedCurve] = useState(INITIAL_BACKTEST_RESULT.equityCurve);
+  const [animatedCurve, setAnimatedCurve] = useState(EMPTY_BACKTEST_RESULT.equityCurve);
   const [streamStatus, setStreamStatus] = useState<"idle" | "computing" | "streaming" | "done">("idle");
   const [revealedMetrics, setRevealedMetrics] = useState(true);
 
@@ -56,7 +56,7 @@ export default function Backtests() {
           const payload = JSON.parse(event.data) as {
             stage: string;
             type: string;
-            data?: { point?: typeof INITIAL_BACKTEST_RESULT.equityCurve[0] } & Partial<BacktestResult> & { n_points?: number };
+            data?: { point?: typeof EMPTY_BACKTEST_RESULT.equityCurve[0] } & Partial<BacktestResult> & { n_points?: number };
           };
 
           if (payload.stage === "metrics" && payload.data) {

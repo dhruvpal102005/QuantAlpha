@@ -90,7 +90,7 @@ async def _list_signals() -> list[dict[str, Any]]:
     conn = await asyncpg.connect(database_url)
     try:
         rows = await conn.fetch(
-            "SELECT id, name, code, category, description, formula, status, created_at, updated_at FROM quant_signals WHERE user_id = $1 ORDER BY created_at DESC",
+            "SELECT id, name, code, category, description, formula, status, metrics, created_at, updated_at FROM quant_signals WHERE user_id = $1 ORDER BY created_at DESC",
             "default",
         )
         return [dict(row) for row in rows]
@@ -114,11 +114,11 @@ async def _upsert_signal(signal: dict[str, Any]) -> None:
     try:
         await conn.execute(
             """
-            INSERT INTO quant_signals (id, name, code, category, description, formula, status)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, updated_at = NOW()
+            INSERT INTO quant_signals (id, name, code, category, description, formula, status, metrics)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+            ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, metrics = EXCLUDED.metrics, updated_at = NOW()
             """,
-            signal["id"], signal["name"], signal["code"], signal["category"], signal["description"], signal["formula"], signal["status"],
+            signal["id"], signal["name"], signal["code"], signal["category"], signal["description"], signal["formula"], signal["status"], json.dumps(signal.get("metrics"), default=str) if signal.get("metrics") is not None else None,
         )
     finally:
         await conn.close()
@@ -128,3 +128,26 @@ def upsert_signal(signal: dict[str, Any]) -> None:
     import asyncio
 
     asyncio.run(_upsert_signal(signal))
+
+
+async def _list_research_runs(signal_id: Optional[str] = None) -> list[dict[str, Any]]:
+    import asyncpg
+
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("DATABASE_URL is required for research history")
+    conn = await asyncpg.connect(database_url)
+    try:
+        if signal_id:
+            rows = await conn.fetch("SELECT * FROM quant_research_runs WHERE user_id = $1 AND signal_id = $2 ORDER BY started_at DESC", "default", signal_id)
+        else:
+            rows = await conn.fetch("SELECT * FROM quant_research_runs WHERE user_id = $1 ORDER BY started_at DESC", "default")
+        return [dict(row) for row in rows]
+    finally:
+        await conn.close()
+
+
+def list_research_runs(signal_id: Optional[str] = None) -> list[dict[str, Any]]:
+    import asyncio
+
+    return asyncio.run(_list_research_runs(signal_id))
