@@ -6,6 +6,7 @@ Real-Time Market Ingestion, Quantitative Analytics, & Autonomous Agent Gateway f
 import asyncio
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Query
@@ -20,11 +21,13 @@ from validation_engine import validate_strategy_pipeline
 from triple_barrier import TripleBarrierLabeler
 from signal_factory import run_signal_discovery_pipeline
 from factor_store import factor_store, stream_factor_evolution_mining
-from research_store import dataframe_hash, list_research_runs, list_signals, persist_research_run, upsert_signal, utc_run_id
+from research_store import dataframe_hash, list_research_runs, list_signals, persist_research_run, update_research_run, upsert_signal, utc_run_id
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+job_executor = ThreadPoolExecutor(max_workers=2)
 
 app = FastAPI(
     title="QuantAlpha Real-Time Quantitative Engine",
@@ -174,6 +177,29 @@ def create_signal(req: SignalCreateRequest):
         logger.error("Unable to persist signal: %s", exc)
         raise HTTPException(status_code=503, detail="Persistent signal store unavailable") from exc
     return signal
+
+
+@app.get("/api/v1/datasets")
+def get_datasets():
+    return {"datasets": [{"id": "nifty-50-yahoo", "label": "NIFTY 50", "ticker": "^NSEI", "source": "Yahoo Finance", "kind": "historical_ohlcv"}]}
+
+
+def _run_validation_job(run_id: str, req: SignalValidateRequest) -> None:
+    try:
+        update_research_run(run_id, "running", {"progress": 10, "stage": "Fetching verified OHLCV"})
+        result = validate_signal(req)
+        update_research_run(run_id, "completed", {"progress": 100, "stage": "Complete", "result": result})
+    except Exception as exc:
+        logger.exception("Validation job failed")
+        update_research_run(run_id, "failed", {"progress": 100, "stage": "Failed"}, str(exc))
+
+
+@app.post("/api/v1/signals/validate/start")
+def start_validation(req: SignalValidateRequest):
+    run_id = utc_run_id("validation")
+    persist_research_run(run_id, req.signalId, "validation", "queued", req.model_dump(), {"progress": 0, "stage": "Queued"}, "Yahoo Finance verified OHLCV")
+    job_executor.submit(_run_validation_job, run_id, req)
+    return {"run_id": run_id, "status": "queued"}
 
 
 @app.post("/api/v1/signals/validate")

@@ -1,0 +1,136 @@
+[33mcommit c7a5dc91da67b89e1dbe2921271cec1107b4829b[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mv0/dhruvpal102005-61b5dcab[m[33m, [m[1;31morigin/v0/dhruvpal102005-61b5dcab[m[33m)[m
+Merge: 6fb8169 3cd3427
+Author: vercel[bot] <35613825+vercel[bot]@users.noreply.github.com>
+Date:   Tue Aug 25 07:06:59 2026 +0000
+
+    Merge pull request #1 from dhruvpal102005/product-feedback-review
+    
+    Update research data management and navigation routes
+
+[33mcommit 3cd3427644198d9e5cc2b8d634b43fede6c13010[m[33m ([m[1;32mproduct-feedback-review[m[33m)[m
+Author: v0 <it+v0agent@vercel.com>
+Date:   Tue Aug 25 07:04:49 2026 +0000
+
+    feat: update navigation links to new routes
+    
+    Co-authored-by: Dhruv  <150419314+dhruvpal102005@users.noreply.github.com>
+
+[33mcommit 45926e0df3c8c6d83593ca5694b7e615ae517aec[m[33m ([m[1;31morigin/product-feedback-review[m[33m)[m
+Author: v0 <it+v0agent@vercel.com>
+Date:   Tue Aug 25 06:55:09 2026 +0000
+
+    feat: enhance research store with new run retrieval and signal metadata inclusion
+    
+    Co-authored-by: Dhruv  <150419314+dhruvpal102005@users.noreply.github.com>
+
+[33mcommit e04f9ea1a69f71c09a6bc08a7867f62cc031c821[m
+Author: v0 <it+v0agent@vercel.com>
+Date:   Tue Aug 25 06:44:26 2026 +0000
+
+    feat: remove demo mode and update data fetching strategy
+    
+    Co-authored-by: Dhruv  <150419314+dhruvpal102005@users.noreply.github.com>
+
+[33mcommit b031db8c44d41ac246d5607571e862f9cd34533b[m
+Author: v0 <it+v0agent@vercel.com>
+Date:   Tue Aug 25 06:30:17 2026 +0000
+
+    refactor: update package resolutions to npm registry
+    
+    Co-authored-by: Dhruv  <150419314+dhruvpal102005@users.noreply.github.com>
+
+[33mcommit 6fb81699282f07a415a1d10f145e3e49dec3c225[m[33m ([m[1;31morigin/v0/dhruvpal102005-8763e56a[m[33m, [m[1;32mv0/dhruvpal102005-8763e56a[m[33m)[m
+Author: Arya-Mm <aryamishra828@gmail.com>
+Date:   Wed Aug 19 11:05:05 2026 +0530
+
+    docs: add detailed presentation notes, defense script, Q&A guide, and Phase 7 roadmap
+
+[33mcommit 24f087421c3065a3a41df481f654ad0dc4ae8edb[m
+Author: Arya-Mm <aryamishra828@gmail.com>
+Date:   Wed Aug 19 08:54:34 2026 +0530
+
+    feat: complete research integrity refactoring and statistical validation engine
+    
+    - Implemented canonical validation engine (Purged K-Fold, CPCV C(6,2)=15 paths, Logistic PBO, DSR with sample length correction, BHY FDR control).
+    - Eliminated synthetic metric clamping and fake heuristics across factor_store, strategy_engine, signal_factory, and main.py APIs.
+    - Enforced strict DEMO vs RESEARCH data mode separation.
+    - Added comprehensive 56-test integrity suite (tests/test_validation.py).
+    - Updated frontend types and API services for null-safe rendering of unvalidated signals.
+
+[33mcommit 4f91f1d960f384b76442066bee1abe819f4a2c38[m
+Author: Dhruv <dhruvpal102005@gmail.com>
+Date:   Tue Aug 18 19:52:15 2026 +0530
+
+    runtime error
+
+[33mcommit 9aecbe9da8df97be17ff41698318f151fc42f342[m
+Author: Dhruv <dhruvpal102005@gmail.com>
+Date:   Tue Aug 18 19:46:52 2026 +0530
+
+    feat: implement factor store, signal factory, and real-time market data hook with dashboard UI integration
+
+[33mcommit c54c91aaad9b959925f2b3de0140bd14590743dc[m
+Author: Dhruv <dhruvpal102005@gmail.com>
+Date:   Tue Aug 18 18:37:47 2026 +0530
+
+    simplified language
+
+[33mcommit 3567829a5e48bc107060d466b66a9177a3ab037d[m
+Author: Dhruv <dhruvpal102005@gmail.com>
+Date:   Tue Aug 18 18:16:58 2026 +0530
+
+    validation backend error resolved
+
+[33mcommit a5601650b5ecbb380ce91b71505bcbca85e852f3[m
+Author: Dhruv <dhruvpal102005@gmail.com>
+Date:   Tue Aug 18 17:49:28 2026 +0530
+
+    locked horizontol scrolling
+
+[33mcommit f5dd6e259153da81c049e5af302bb75019e2ca54[m
+Author: Dhruv <dhruvpal102005@gmail.com>
+Date:   Tue Aug 18 17:35:11 2026 +0530
+
+    Initial backend
+
+[33mcommit a29bb934137829a86013f334fad93da210273c69[m
+Author: Dhruv <dhruvpal102005@gmail.com>
+Date:   Tue Aug 18 16:26:43 2026 +0530
+
+    added basic backend
+
+[33mcommit f0880068f15e8debe8ce210382e22aed363e2c0d[m
+Author: Dhruv <dhruvpal102005@gmail.com>
+Date:   Tue Aug 18 15:47:51 2026 +0530
+
+    minor ui changes
+
+[33mcommit a3e71f19e2ba0e150ee7bf9fc18051537f911caf[m
+Author: Dhruv <dhruvpal102005@gmail.com>
+Date:   Tue Aug 18 15:40:42 2026 +0530
+
+    Changed theme
+
+[33mcommit 0bca9a8e03cef084a1dbf2336a9bcc76326b2418[m
+Author: Gokup23 <976575334a@gmail.com>
+Date:   Tue Aug 18 13:06:23 2026 +0530
+
+    Almost ui done
+
+[33mcommit 9701fcceb0d2bde455d1eca09b3019ef08f73a7e[m
+Author: Gokup23 <976575334a@gmail.com>
+Date:   Tue Aug 18 12:52:03 2026 +0530
+
+    added autonomous page
+
+[33mcommit ef75630235aaf64b6654fb27925f7f97f3b87ca4[m
+Author: Gokup23 <976575334a@gmail.com>
+Date:   Tue Aug 18 12:48:01 2026 +0530
+
+    Initial Commit
+
+[33mcommit 7f66c2e6e474f9ac3e8466829a0e485444fefcbf[m
+Author: Arya M <128237752+Arya-Mm@users.noreply.github.com>
+Date:   Tue Aug 18 12:12:38 2026 +0530
+
+    Initial commit
