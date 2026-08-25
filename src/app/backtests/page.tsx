@@ -242,7 +242,7 @@ export default function Backtests() {
             <li>
               <Link
                 className="flex items-center gap-3 px-3 py-2 rounded-lg text-stone-600 hover:bg-[#eeeeea] hover:text-stone-900 transition-colors"
-                href="#"
+                href="/validation"
               >
                 <span className="material-symbols-outlined text-[20px]">
                   rule
@@ -265,7 +265,7 @@ export default function Backtests() {
             <li>
               <Link
                 className="flex items-center gap-3 px-3 py-2 rounded-lg text-stone-600 hover:bg-[#eeeeea] hover:text-stone-900 transition-colors"
-                href="#"
+                href="/portfolio"
               >
                 <span className="material-symbols-outlined text-[20px]">
                   account_balance
@@ -276,7 +276,7 @@ export default function Backtests() {
             <li>
               <Link
                 className="flex items-center gap-3 px-3 py-2 rounded-lg text-stone-600 hover:bg-[#eeeeea] hover:text-stone-900 transition-colors"
-                href="#"
+                href="/reports"
               >
                 <span className="material-symbols-outlined text-[20px]">
                   description
@@ -304,7 +304,7 @@ export default function Backtests() {
             <li>
               <Link
                 className="flex items-center gap-3 px-3 py-2 rounded-lg text-stone-600 hover:bg-[#eeeeea] hover:text-stone-900 transition-colors"
-                href="#"
+                href="/settings"
               >
                 <span className="material-symbols-outlined text-[20px]">
                   settings
@@ -315,7 +315,7 @@ export default function Backtests() {
             <li>
               <Link
                 className="flex items-center gap-3 px-3 py-2 rounded-lg text-stone-600 hover:bg-[#eeeeea] hover:text-stone-900 transition-colors"
-                href="#"
+                href="/support"
               >
                 <span className="material-symbols-outlined text-[20px]">
                   help

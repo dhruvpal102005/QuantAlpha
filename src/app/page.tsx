@@ -192,7 +192,7 @@ export default function OverviewDashboard() {
           </Link>
           <Link
             className="text-stone-600 hover:text-stone-900 hover:bg-[#eeeeea] transition-colors rounded-lg mx-2 px-3 py-2 flex items-center gap-3"
-            href="#"
+            href="/data"
           >
             <span className="material-symbols-outlined text-[20px]">database</span>
             <span className="font-body-sm text-body-sm font-medium">Data</span>
@@ -206,7 +206,7 @@ export default function OverviewDashboard() {
           </Link>
           <Link
             className="text-stone-600 hover:text-stone-900 hover:bg-[#eeeeea] transition-colors rounded-lg mx-2 px-3 py-2 flex items-center gap-3"
-            href="#"
+            href="/validation"
           >
             <span className="material-symbols-outlined text-[20px]">rule</span>
             <span className="font-body-sm text-body-sm font-medium">Validation</span>
@@ -220,14 +220,14 @@ export default function OverviewDashboard() {
           </Link>
           <Link
             className="text-stone-600 hover:text-stone-900 hover:bg-[#eeeeea] transition-colors rounded-lg mx-2 px-3 py-2 flex items-center gap-3"
-            href="#"
+            href="/portfolio"
           >
             <span className="material-symbols-outlined text-[20px]">account_balance</span>
             <span className="font-body-sm text-body-sm font-medium">Portfolio</span>
           </Link>
           <Link
             className="text-stone-600 hover:text-stone-900 hover:bg-[#eeeeea] transition-colors rounded-lg mx-2 px-3 py-2 flex items-center gap-3"
-            href="#"
+            href="/reports"
           >
             <span className="material-symbols-outlined text-[20px]">description</span>
             <span className="font-body-sm text-body-sm font-medium">Reports</span>
@@ -244,21 +244,21 @@ export default function OverviewDashboard() {
           </div>
           <Link
             className="text-stone-600 hover:text-stone-900 hover:bg-[#eeeeea] transition-colors rounded-lg mx-2 px-3 py-2 flex items-center gap-3"
-            href="#"
+            href="/data"
           >
             <span className="material-symbols-outlined text-[20px]">storage</span>
             <span className="font-body-sm text-body-sm font-medium">Data Sources</span>
           </Link>
           <Link
             className="text-stone-600 hover:text-stone-900 hover:bg-[#eeeeea] transition-colors rounded-lg mx-2 px-3 py-2 flex items-center gap-3"
-            href="#"
+            href="/pipeline-runs"
           >
             <span className="material-symbols-outlined text-[20px]">precision_manufacturing</span>
             <span className="font-body-sm text-body-sm font-medium">Pipeline Runs</span>
           </Link>
           <Link
             className="text-stone-600 hover:text-stone-900 hover:bg-[#eeeeea] transition-colors rounded-lg mx-2 px-3 py-2 flex items-center gap-3"
-            href="#"
+            href="/settings"
           >
             <span className="material-symbols-outlined text-[20px]">settings</span>
             <span className="font-body-sm text-body-sm font-medium">Settings</span>

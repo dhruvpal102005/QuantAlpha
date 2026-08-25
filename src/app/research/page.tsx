@@ -471,7 +471,7 @@ export default function Research() {
 
           <Link
             className="flex items-center gap-3 px-3 py-2 rounded-lg text-stone-600 hover:bg-[#eeeeea] hover:text-stone-900 transition-colors"
-            href="#"
+            href="/validation"
           >
             <span className="material-symbols-outlined text-[20px]">
               rule
@@ -491,7 +491,7 @@ export default function Research() {
 
           <Link
             className="flex items-center gap-3 px-3 py-2 rounded-lg text-stone-600 hover:bg-[#eeeeea] hover:text-stone-900 transition-colors"
-            href="#"
+            href="/portfolio"
           >
             <span className="material-symbols-outlined text-[20px]">
               account_balance
@@ -501,7 +501,7 @@ export default function Research() {
 
           <Link
             className="flex items-center gap-3 px-3 py-2 rounded-lg text-stone-600 hover:bg-[#eeeeea] hover:text-stone-900 transition-colors"
-            href="#"
+            href="/reports"
           >
             <span className="material-symbols-outlined text-[20px]">
               description
@@ -524,7 +524,7 @@ export default function Research() {
         <div className="flex flex-col gap-1 px-2 mt-auto pt-4 border-t border-[#e5e5df]">
           <Link
             className="flex items-center gap-3 px-3 py-2 rounded-lg text-stone-600 hover:bg-[#eeeeea] hover:text-stone-900 transition-colors"
-            href="#"
+            href="/settings"
           >
             <span className="material-symbols-outlined text-[20px]">
               settings
@@ -533,7 +533,7 @@ export default function Research() {
           </Link>
           <Link
             className="flex items-center gap-3 px-3 py-2 rounded-lg text-stone-600 hover:bg-[#eeeeea] hover:text-stone-900 transition-colors"
-            href="#"
+            href="/support"
           >
             <span className="material-symbols-outlined text-[20px]">
               help
