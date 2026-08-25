@@ -205,7 +205,7 @@ export default function Research() {
                   1. Smart Testing (No Cheating)
                 </h4>
                 <p className="text-stone-600">
-                  Standard backtests "cheat" by accidentally using future information. We test strategies on separate time periods and add safety buffers to ensure fair testing. This means the results you see are realistic.
+                  Standard backtests &quot;cheat&quot; by accidentally using future information. We test strategies on separate time periods and add safety buffers to ensure fair testing. This means the results you see are realistic.
                 </p>
                 <code className="block font-mono bg-white p-2 border border-[#e5e5df] rounded text-[11px] text-stone-800">
                   Safety Buffer: We skip 5 trading days between test periods

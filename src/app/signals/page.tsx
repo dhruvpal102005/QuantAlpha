@@ -663,7 +663,7 @@ export default function SignalsPage() {
               <span className="text-xs font-bold text-stone-500 uppercase">Tier:</span>
               <select
                 value={selectedQuality}
-                onChange={(e) => setSelectedQuality(e.target.value as any)}
+                onChange={(e) => setSelectedQuality(e.target.value as FactorQuality | "all")}
                 className="bg-[#f8f8f6] border border-[#e5e5df] text-xs font-semibold rounded-lg px-2.5 py-1.5 text-stone-800 focus:outline-none focus:border-orange-500"
               >
                 <option value="all">All Tiers</option>
@@ -678,7 +678,7 @@ export default function SignalsPage() {
               <span className="text-xs font-bold text-stone-500 uppercase">Phase:</span>
               <select
                 value={selectedPhase}
-                onChange={(e) => setSelectedPhase(e.target.value as any)}
+                onChange={(e) => setSelectedPhase(e.target.value as EvolutionPhase | "all")}
                 className="bg-[#f8f8f6] border border-[#e5e5df] text-xs font-semibold rounded-lg px-2.5 py-1.5 text-stone-800 focus:outline-none focus:border-orange-500"
               >
                 <option value="all">All Phases</option>

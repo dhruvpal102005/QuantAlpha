@@ -295,7 +295,7 @@ export default function CommandCenter() {
               </div>
 
               <div className="bg-white border border-[#e5e5df] rounded-xl p-4 shadow-xs">
-                <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Today's PnL</div>
+                <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Today&apos;s PnL</div>
                 <div className={`text-xl font-bold font-mono mt-1 ${liveMarket.dailyPnL >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
                   {liveMarket.dailyPnL >= 0 ? "+" : ""}₹{liveMarket.dailyPnL.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
                   <span className="text-xs ml-1 font-semibold">({liveMarket.dailyPnLPct}%)</span>
