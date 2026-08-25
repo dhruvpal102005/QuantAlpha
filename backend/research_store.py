@@ -151,3 +151,25 @@ def list_research_runs(signal_id: Optional[str] = None) -> list[dict[str, Any]]:
     import asyncio
 
     return asyncio.run(_list_research_runs(signal_id))
+
+
+async def _update_research_run(run_id: str, status: str, result: Optional[dict[str, Any]] = None, error: Optional[str] = None) -> None:
+    import asyncpg
+
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("DATABASE_URL is required for research jobs")
+    conn = await asyncpg.connect(database_url)
+    try:
+        await conn.execute(
+            "UPDATE quant_research_runs SET status = $2, result = COALESCE($3::jsonb, result), error = $4, completed_at = CASE WHEN $2 IN ('completed', 'failed') THEN NOW() ELSE completed_at END WHERE id = $1",
+            run_id, status, json.dumps(result, default=str) if result is not None else None, error,
+        )
+    finally:
+        await conn.close()
+
+
+def update_research_run(run_id: str, status: str, result: Optional[dict[str, Any]] = None, error: Optional[str] = None) -> None:
+    import asyncio
+
+    asyncio.run(_update_research_run(run_id, status, result, error))

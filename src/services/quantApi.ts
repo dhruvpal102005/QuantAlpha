@@ -128,6 +128,31 @@ export type SignalCatalog = {
   validated: import("../types/quant").SignalItem[];
 };
 
+export async function createSignal(payload: { id: string; name: string; code: string; category: string; description: string; formula: string }) {
+  const response = await fetch("http://127.0.0.1:8000/api/v1/signals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  if (!response.ok) throw new Error("Unable to persist signal");
+  return response.json();
+}
+
+export async function fetchDatasets() {
+  const response = await fetch("http://127.0.0.1:8000/api/v1/datasets", { cache: "no-store" });
+  if (!response.ok) throw new Error("Dataset catalog unavailable");
+  return response.json() as Promise<{ datasets: Array<{ id: string; label: string; ticker: string; source: string; kind: string }> }>;
+}
+
+export async function startValidation(payload: { signalId: string; ticker: string; startDate: string; endDate: string; cvFolds: number; embargoPct: number; nTrials: number }) {
+  const response = await fetch("http://127.0.0.1:8000/api/v1/signals/validate/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  if (!response.ok) throw new Error("Unable to start validation");
+  return response.json() as Promise<{ run_id: string; status: string }>;
+}
+
+export async function fetchResearchRuns(signalId?: string) {
+  const query = signalId ? `?signal_id=${encodeURIComponent(signalId)}` : "";
+  const response = await fetch(`http://127.0.0.1:8000/api/v1/research/runs${query}`, { cache: "no-store" });
+  if (!response.ok) throw new Error("Research history unavailable");
+  return response.json() as Promise<{ runs: Array<Record<string, unknown>> }>;
+}
+
 export async function fetchSignals(): Promise<SignalCatalog> {
   const response = await fetch("http://127.0.0.1:8000/api/v1/signals", { cache: "no-store" });
   if (!response.ok) throw new Error(`Signal store unavailable: ${response.statusText}`);
