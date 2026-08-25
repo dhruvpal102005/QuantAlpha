@@ -2,24 +2,17 @@
 QuantAlpha Market Data Ingestion Engine
 Fetches, cleans, and caches real historical market data for Indian Equities (NSE).
 
-DEMO MODE  : Falls back to synthetic GBM when yfinance unavailable. 
-             Explicitly tagged — never silently used for research metrics.
-RESEARCH MODE: Raises ResearchDataUnavailable if real data cannot be fetched.
+REAL DATA ONLY: Raises ResearchDataUnavailable whenever a verified market data source is unavailable.
 """
 
 import os
 import warnings
 import yfinance as yf
 import pandas as pd
-import numpy as np
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from research_mode import (
-    is_research_mode,
-    require_real_data,
-    ResearchDataUnavailable,
-)
+from research_mode import ResearchDataUnavailable
 
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -45,32 +38,6 @@ NIFTY50_CROSS_SECTION = [
 ]
 
 
-def _synthetic_ohlcv(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
-    """
-    Generates synthetic GBM price data for DEMO mode ONLY.
-    Never used for research metrics. Tagged explicitly.
-    """
-    dates = pd.date_range(start=start_date, end=end_date, freq="B")
-    rng = np.random.default_rng(abs(hash(ticker)) % 10_000)
-    mu, sigma = 0.0006, 0.012
-    returns = rng.normal(mu, sigma, len(dates))
-    base_price = 15000.0 if "NSEI" in ticker.upper() else 1000.0
-    price_series = base_price * np.exp(np.cumsum(returns))
-
-    df = pd.DataFrame(
-        {
-            "Open": price_series * (1 + rng.normal(0, 0.002, len(dates))),
-            "High": price_series * (1 + np.abs(rng.normal(0, 0.005, len(dates)))),
-            "Low": price_series * (1 - np.abs(rng.normal(0, 0.005, len(dates)))),
-            "Close": price_series,
-            "Volume": rng.integers(500_000, 5_000_000, len(dates)).astype(float),
-        },
-        index=dates,
-    )
-    df.attrs["_synthetic"] = True  # Mark the frame as synthetic
-    return df
-
-
 def fetch_historical_ohlcv(
     ticker: str,
     start_date: str = "2015-01-01",
@@ -79,8 +46,7 @@ def fetch_historical_ohlcv(
     """
     Fetches real OHLCV data from Yahoo Finance with local caching.
 
-    DEMO MODE  : Returns synthetic data on yfinance failure (with warning).
-    RESEARCH MODE: Raises ResearchDataUnavailable on yfinance failure.
+    Raises ResearchDataUnavailable when a real market data source cannot provide data.
 
     Returns
     -------
@@ -121,19 +87,13 @@ def fetch_historical_ohlcv(
             data.attrs["_synthetic"] = False
             return data
     except Exception as e:
-        if is_research_mode():
-            raise ResearchDataUnavailable(
-                f"RESEARCH MODE: yfinance failed for '{ticker}': {e}"
-            )
-        warnings.warn(
-            f"[DEMO MODE] yfinance unavailable for '{ticker}': {e}. "
-            "Returning synthetic GBM data — NOT suitable for research metrics.",
-            stacklevel=2,
-        )
+        raise ResearchDataUnavailable(
+            f"Real market data unavailable for '{ticker}': {e}"
+        ) from e
 
-    # DEMO MODE only: synthetic fallback
-    require_real_data(ticker, None)  # No-op in demo, raises in research
-    return _synthetic_ohlcv(ticker, start_date, end_date)
+    raise ResearchDataUnavailable(
+        f"Real market data unavailable for '{ticker}' for {start_date} to {end_date}"
+    )
 
 
 def fetch_cross_section(

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export interface LiveQuote {
   symbol: string;
@@ -182,11 +182,25 @@ export interface TickDirection {
   [symbol: string]: "up" | "down" | "flat";
 }
 
+const EMPTY_STATE: LiveMarketState = {
+  isConnected: false,
+  isLiveFeed: false,
+  nav: 0,
+  cashBalance: 0,
+  investedCapital: 0,
+  dailyPnL: 0,
+  dailyPnLPct: 0,
+  openPositionsCount: 0,
+  positions: [],
+  quotes: {},
+  lastUpdate: "Unavailable",
+};
+
 export function useLiveMarket() {
-  const [state, setState] = useState<LiveMarketState>(DEFAULT_STATE);
+  const [state, setState] = useState<LiveMarketState>(EMPTY_STATE);
   const [tickDirection, setTickDirection] = useState<TickDirection>({});
   const [isClient, setIsClient] = useState(false);
-  const prevPricesRef = { current: {} as Record<string, number> };
+  const prevPricesRef = useRef<Record<string, number>>({});
 
   // Prevent hydration mismatch by only showing live data after client mount
   useEffect(() => {
@@ -196,7 +210,6 @@ export function useLiveMarket() {
   useEffect(() => {
     let isMounted = true;
     let eventSource: EventSource | null = null;
-    let fallbackInterval: ReturnType<typeof setInterval> | null = null;
 
     function applyUpdate(data: {
       nav: number; cashBalance: number; investedCapital: number;
@@ -233,28 +246,6 @@ export function useLiveMarket() {
       });
     }
 
-    function startMicroTickFallback() {
-      fallbackInterval = setInterval(() => {
-        if (!isMounted) return;
-        const newDirections: TickDirection = {};
-        setState((prev) => {
-          const updatedQuotes: Record<string, LiveQuote> = {};
-          for (const [sym, q] of Object.entries(prev.quotes)) {
-            const delta = (Math.random() - 0.48) * (q.price * 0.0004);
-            const newPrice = Number((q.price + delta).toFixed(2));
-            const change = Number((newPrice - q.prevClose).toFixed(2));
-            const changePct = Number(((change / q.prevClose) * 100).toFixed(2));
-            newDirections[sym] = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
-            updatedQuotes[sym] = { ...q, price: newPrice, change, changePct,
-              timestamp: new Date().toLocaleTimeString("en-IN") };
-          }
-          setTickDirection(newDirections);
-          return { ...prev, quotes: updatedQuotes,
-            lastUpdate: new Date().toLocaleTimeString("en-IN") };
-        });
-      }, 2500);
-    }
-
     // Try SSE first
     try {
       eventSource = new EventSource("http://127.0.0.1:8000/api/v1/market/stream");
@@ -269,32 +260,24 @@ export function useLiveMarket() {
       eventSource.onerror = () => {
         eventSource?.close();
         eventSource = null;
-        // SSE failed — fall back to micro-tick simulation
-        startMicroTickFallback();
+        if (isMounted) setState((prev) => ({ ...prev, isConnected: false, isLiveFeed: false, lastUpdate: "Feed unavailable" }));
       };
     } catch {
-      startMicroTickFallback();
+      if (isMounted) setState((prev) => ({ ...prev, isConnected: false, isLiveFeed: false, lastUpdate: "Feed unavailable" }));
     }
 
     return () => {
       isMounted = false;
       eventSource?.close();
-      if (fallbackInterval) clearInterval(fallbackInterval);
     };
   }, []);
 
   // Return static state during SSR to prevent hydration mismatch
   if (!isClient) {
     return {
-      ...DEFAULT_STATE,
+      ...EMPTY_STATE,
       tickDirection: {} as TickDirection,
       lastUpdate: "Loading...",
-      quotes: Object.fromEntries(
-        Object.entries(DEFAULT_STATE.quotes).map(([key, quote]) => [
-          key,
-          { ...quote, timestamp: "Loading..." }
-        ])
-      )
     };
   }
 
