@@ -110,6 +110,8 @@ export const INITIAL_RISK_CONSTRAINTS: RiskGateConstraint[] = [
  * - Slippage & Commission in basis points
  */
 export async function runBacktestSimulation(config: BacktestConfig): Promise<BacktestResult> {
+  throw new Error("Real backtest service unavailable. No synthetic results are generated.");
+
   // Try connecting to live FastAPI Python Backend
   try {
     const controller = new AbortController();
