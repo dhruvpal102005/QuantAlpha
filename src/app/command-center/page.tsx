@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { ActivityLogEvent, RiskGateConstraint, AgentRole } from "../../types/quant";
-import { INITIAL_ACTIVITY_LOG, INITIAL_RISK_CONSTRAINTS } from "../../services/quantApi";
 import { useLiveMarket } from "../../hooks/useLiveMarket";
 
 export default function CommandCenter() {
@@ -12,78 +11,13 @@ export default function CommandCenter() {
   const [showKillModal, setShowKillModal] = useState(false);
   const [filterAgent, setFilterAgent] = useState<AgentRole | "All">("All");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const [activityLogs, setActivityLogs] = useState<ActivityLogEvent[]>(INITIAL_ACTIVITY_LOG);
-  const [riskConstraints] = useState<RiskGateConstraint[]>(INITIAL_RISK_CONSTRAINTS);
+  const [activityLogs, setActivityLogs] = useState<ActivityLogEvent[]>([]);
+  const [riskConstraints] = useState<RiskGateConstraint[]>([]);
   
   // Real-time live market hook
   const liveMarket = useLiveMarket();
 
-  // Simulated live event ticker for Auto Paper mode
-  useEffect(() => {
-    if (mode !== "Auto Paper" || isHalted) return;
-
-    const interval = setInterval(() => {
-      const relQuote = liveMarket.quotes["RELIANCE"] || { price: 3012.40 };
-      const tcsQuote = liveMarket.quotes["TCS"] || { price: 3985.00 };
-      const hdfcQuote = liveMarket.quotes["HDFCBANK"] || { price: 1642.50 };
-
-      const sampleEvents: ActivityLogEvent[] = [
-        {
-          id: `evt-${Date.now()}-1`,
-          timestamp: new Date().toLocaleTimeString("en-IN", { hour12: false }),
-          agent: "Execution",
-          action: "TWAP Slice #4 filled on NSE Paper Router",
-          evidence: `15 RELIANCE @ ₹${relQuote.price.toLocaleString("en-IN")} (Arrival Slippage: +0.02 bps)`,
-          status: "success",
-        },
-        {
-          id: `evt-${Date.now()}-2`,
-          timestamp: new Date().toLocaleTimeString("en-IN", { hour12: false }),
-          agent: "Risk",
-          action: "Pre-Trade Beta & VaR constraint check passed",
-          evidence: "Portfolio Net Beta = +0.038 (Bounds: [-0.1, +0.1]) | 99% 1-Day VaR = 1.12%",
-          status: "success",
-        },
-        {
-          id: `evt-${Date.now()}-3`,
-          timestamp: new Date().toLocaleTimeString("en-IN", { hour12: false }),
-          agent: "Strategy",
-          action: "Lead Agent: Formulated Anomaly Hypothesis on NIFTY IT",
-          evidence: `TCS Price: ₹${tcsQuote.price.toLocaleString("en-IN")} | FinBERT Sentiment Shock: +0.82`,
-          status: "info",
-        },
-        {
-          id: `evt-${Date.now()}-4`,
-          timestamp: new Date().toLocaleTimeString("en-IN", { hour12: false }),
-          agent: "Strategy",
-          action: "Quant Coder Agent: Synthesized Vectorized AST Expression",
-          evidence: "Formula: Rank(Delta(Close, 5)) * (1 - Rank(Volume / RollingMean(Volume, 20)))",
-          status: "info",
-        },
-        {
-          id: `evt-${Date.now()}-5`,
-          timestamp: new Date().toLocaleTimeString("en-IN", { hour12: false }),
-          agent: "Risk",
-          action: "Regulator Agent: Quality Gate Passed (Corr < 0.90)",
-          evidence: "AST Depth = 3 <= 5 | Max Correlation with Factor Store = 0.38 < 0.90",
-          status: "success",
-        },
-        {
-          id: `evt-${Date.now()}-6`,
-          timestamp: new Date().toLocaleTimeString("en-IN", { hour12: false }),
-          agent: "Portfolio",
-          action: "Validation Agent: CPCV Fold Evaluation Complete",
-          evidence: "Purged 5-Fold CPCV: OOS Sharpe = 1.94 | DSR = 0.962 | PBO = 0.11",
-          status: "success",
-        },
-      ];
-
-      const newEvent = sampleEvents[Math.floor(Math.random() * sampleEvents.length)];
-      setActivityLogs((prev) => [newEvent, ...prev.slice(0, 24)]);
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [mode, isHalted, liveMarket.quotes]);
+  // Activity events are populated only by verified backend actions.
 
   const handleTriggerKillSwitch = async () => {
     setIsHalted(true);

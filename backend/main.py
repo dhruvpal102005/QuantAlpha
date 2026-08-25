@@ -20,6 +20,7 @@ from validation_engine import validate_strategy_pipeline
 from triple_barrier import TripleBarrierLabeler
 from signal_factory import run_signal_discovery_pipeline
 from factor_store import factor_store, stream_factor_evolution_mining
+from research_store import dataframe_hash, list_research_runs, list_signals, persist_research_run, upsert_signal, utc_run_id
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -34,7 +35,7 @@ app = FastAPI(
 # Enable CORS for Next.js Frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -57,9 +58,21 @@ class BacktestRequest(BaseModel):
 
 class SignalValidateRequest(BaseModel):
     signalId: str
-    cvFolds: int = 5
-    embargoPct: float = 0.01
-    nTrials: int = 50
+    ticker: str = Field("^NSEI", min_length=1, max_length=32)
+    startDate: str = Field("2020-01-01", pattern=r"^\d{4}-\d{2}-\d{2}$")
+    endDate: str = Field("2024-12-31", pattern=r"^\d{4}-\d{2}-\d{2}$")
+    cvFolds: int = Field(5, ge=2, le=20)
+    embargoPct: float = Field(0.01, ge=0, le=0.5)
+    nTrials: int = Field(50, ge=1, le=10000)
+
+
+class SignalCreateRequest(BaseModel):
+    id: str = Field(..., min_length=2, max_length=100)
+    name: str = Field(..., min_length=2, max_length=120)
+    code: str = Field(..., min_length=2, max_length=120)
+    category: str = Field(..., min_length=2, max_length=80)
+    description: str = Field(..., min_length=10, max_length=2000)
+    formula: str = Field(..., min_length=2, max_length=4000)
 
 
 class RealBacktestRequest(BaseModel):
@@ -75,61 +88,6 @@ class RealBacktestRequest(BaseModel):
 
 class KillSwitchRequest(BaseModel):
     reason: Optional[str] = "Manual Kill Switch Engaged by Admin"
-
-
-# In-memory storage for signals state
-# NOTE: Sharpe/DSR/PBO below are DEMO placeholders (not computed from real data).
-# The live /signals/validate endpoint computes these from real CPCV.
-SIGNALS_DB = {
-    "candidates": [
-        {
-            "id": "sig-1",
-            "name": "MOM_CROSS_V4",
-            "code": "sig_8f92a_b",
-            "category": "Technical",
-            "oosSharpe": None,
-            "maxDrawdown": None,
-            "dsr": None,
-            "pbo": None,
-            "status": "Awaiting Validation",
-            "_mode": "DEMO",
-            "description": "Multi-timeframe exponential moving average crossover with ATR volatility expansion gate.",
-            "formula": "Signal_t = sign(EMA_20(P_t) - EMA_50(P_t)) * I(ATR_14 > Median(ATR_14, 60))"
-        },
-        {
-            "id": "sig-2",
-            "name": "SENT_NLP_AGG",
-            "code": "sig_3c11d_a",
-            "category": "Sentiment",
-            "oosSharpe": None,
-            "maxDrawdown": None,
-            "dsr": None,
-            "pbo": None,
-            "status": "Awaiting Data",
-            "_mode": "DEMO",
-            "description": "FinBERT sentiment polarity aggregated from Indian financial news & corporate filings.",
-            "formula": "S_t = \\sum w_i * (P_{pos, i} - P_{neg, i}) * \\log(1 + Relevance_i)"
-        },
-        {
-            "id": "sig-3",
-            "name": "PAIR_COINT_ARB",
-            "code": "sig_7e44a_c",
-            "category": "Statistical Arbitrage",
-            "oosSharpe": None,
-            "maxDrawdown": None,
-            "dsr": None,
-            "pbo": None,
-            "status": "Awaiting Validation",
-            "_mode": "DEMO",
-            "description": "Engle-Granger cointegrated pairs mean-reversion on NIFTY Bank constituents.",
-            "formula": "z_t = (Spread_t - \\mu_{60}) / \\sigma_{60}"
-        }
-    ],
-    "validated": [],
-    # NOTE: Validated list is populated by the /signals/validate endpoint
-    # which runs the real CPCV + PBO + DSR pipeline.
-    # No pre-seeded fabricated metrics.
-}
 
 
 # ==========================================
@@ -189,10 +147,33 @@ def run_backtest(req: BacktestRequest):
 
 @app.get("/api/v1/signals")
 def get_signals():
-    """
-    Retrieves all candidate and validated signals.
-    """
-    return SIGNALS_DB
+    """Retrieve persisted candidate and validated signals."""
+    signals = list_signals()
+    return {
+        "candidates": [signal for signal in signals if signal["status"] not in ("Passed Validation", "Rejected")],
+        "validated": [signal for signal in signals if signal["status"] == "Passed Validation"],
+    }
+
+
+@app.get("/api/v1/research/runs")
+def get_research_runs(signal_id: Optional[str] = Query(None)):
+    try:
+        return {"runs": list_research_runs(signal_id)}
+    except Exception as exc:
+        logger.error("Unable to load research history: %s", exc)
+        raise HTTPException(status_code=503, detail="Persistent research history unavailable") from exc
+
+
+@app.post("/api/v1/signals")
+def create_signal(req: SignalCreateRequest):
+    """Create a persistent signal candidate for a real validation run."""
+    signal = {**req.model_dump(), "status": "Awaiting Validation"}
+    try:
+        upsert_signal(signal)
+    except Exception as exc:
+        logger.error("Unable to persist signal: %s", exc)
+        raise HTTPException(status_code=503, detail="Persistent signal store unavailable") from exc
+    return signal
 
 
 @app.post("/api/v1/signals/validate")
@@ -200,35 +181,22 @@ def validate_signal(req: SignalValidateRequest):
     """
     Executes REAL Purged K-Fold Cross-Validation with CPCV, PBO, DSR on a candidate signal.
     """
-    candidate = next((s for s in SIGNALS_DB["candidates"] if s["id"] == req.signalId), None)
+    try:
+        candidate = next((s for s in list_signals() if s["id"] == req.signalId), None)
+    except Exception as exc:
+        logger.error("Unable to load persisted signals: %s", exc)
+        raise HTTPException(status_code=503, detail="Persistent signal store unavailable") from exc
     if not candidate:
-        candidate = next((s for s in SIGNALS_DB["validated"] if s["id"] == req.signalId), None)
-    if not candidate:
-        candidate = {
-            "id": req.signalId,
-            "name": f"SIGNAL_{req.signalId.upper()}",
-            "code": f"sig_{req.signalId}",
-            "category": "Technical",
-            "oosSharpe": 1.84,
-            "maxDrawdown": -12.4,
-            "dsr": 0.96,
-            "pbo": 0.12,
-            "status": "Backtest Running",
-            "description": "Validated Quantitative Alpha Signal",
-            "formula": "Signal_t = f(X_t)"
-        }
+        raise HTTPException(status_code=404, detail=f"Signal '{req.signalId}' was not found")
 
     try:
         import numpy as np
         import pandas as pd
         from data_loader import fetch_historical_ohlcv
-        from triple_barrier import TripleBarrierLabeler
         from signal_factory import _build_t1_from_barrier_labels
-        from research_mode import label_as_demo
 
         # Fetch real NSE data for this signal's validation
-        data = fetch_historical_ohlcv("^NSEI", "2021-01-01", "2024-12-31")
-        is_synthetic = data.attrs.get("_synthetic", False)
+        data = fetch_historical_ohlcv(req.ticker, req.startDate, req.endDate)
         prices = data["Close"]
 
         # Triple-barrier labels → real t1 Series
@@ -266,8 +234,7 @@ def validate_signal(req: SignalValidateRequest):
 
         passed = val_status == "PASSED"
 
-        # Graduate signal to validated only if it actually passed
-        SIGNALS_DB["candidates"] = [s for s in SIGNALS_DB["candidates"] if s["id"] != req.signalId]
+        # Update the persisted signal status only after the real validation completes.
         validated_item = {
             **candidate,
             "id": f"val-{int(datetime.utcnow().timestamp())}",
@@ -276,10 +243,10 @@ def validate_signal(req: SignalValidateRequest):
             "dsr": round(dsr_res["dsr"], 4) if dsr_res.get("dsr") is not None else None,
             "pbo": round(pbo_res["pbo"], 4) if pbo_res.get("pbo") is not None else None,
             "oosSharpe": round(sharpe, 3) if sharpe is not None else None,
-            "_mode": "DEMO" if is_synthetic else "RESEARCH",
+            "metrics": {"oosSharpe": sharpe, "dsr": dsr_res.get("dsr"), "pbo": pbo_res.get("pbo")},
+            "_mode": "RESEARCH",
         }
-        if passed:
-            SIGNALS_DB["validated"].insert(0, validated_item)
+        upsert_signal(validated_item)
 
         result = {
             "status": val_status,
@@ -293,11 +260,19 @@ def validate_signal(req: SignalValidateRequest):
                 "sharpe_ratio": sharpe,
                 "n_cpcv_paths": n_paths,
                 "n_samples": validation_result.get("n_samples"),
-                "mode": "DEMO (synthetic data)" if is_synthetic else "RESEARCH (real NSE data)",
+                "mode": "RESEARCH (verified NSE data)",
             },
         }
-        if is_synthetic:
-            label_as_demo(result)
+        persist_research_run(
+            run_id=utc_run_id("validation"),
+            signal_id=req.signalId,
+            run_type="validation",
+            status="completed",
+            parameters=req.model_dump(),
+            result=result,
+            data_source="Yahoo Finance verified OHLCV",
+            data_hash=dataframe_hash(data),
+        )
         return result
 
     except Exception as e:
@@ -372,7 +347,7 @@ def run_real_backtest(req: RealBacktestRequest):
         pbo_res = validation_result.get("pbo", {})
         dsr_res = validation_result.get("dsr", {})
 
-        return {
+        result = {
             "ticker": req.ticker,
             "period": f"{req.startDate} to {req.endDate}",
             "label_statistics": label_stats,
@@ -387,6 +362,17 @@ def run_real_backtest(req: RealBacktestRequest):
             },
             "cpcv_paths_sample": validation_result.get("cpcv_paths", [])[:5],
         }
+        persist_research_run(
+            run_id=utc_run_id("backtest"),
+            signal_id=req.signalId,
+            run_type="backtest",
+            status="completed",
+            parameters=req.model_dump(),
+            result=result,
+            data_source="Yahoo Finance verified OHLCV",
+            data_hash=dataframe_hash(data),
+        )
+        return result
         
     except Exception as e:
         logger.error(f"Real backtest failed: {str(e)}")
