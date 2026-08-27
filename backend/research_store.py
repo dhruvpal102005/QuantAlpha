@@ -17,6 +17,7 @@ async def _insert_research_run(
     data_source: str,
     data_hash: Optional[str] = None,
     error: Optional[str] = None,
+    user_id: str = "default",
 ) -> None:
     import asyncpg
 
@@ -29,8 +30,8 @@ async def _insert_research_run(
         await conn.execute(
             """
             INSERT INTO quant_research_runs
-              (id, signal_id, run_type, status, parameters, result, data_source, data_hash, error, completed_at)
-            VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9, CASE WHEN $4 IN ('completed', 'failed') THEN NOW() ELSE NULL END)
+              (id, signal_id, run_type, status, parameters, result, data_source, data_hash, error, user_id, completed_at)
+            VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9, $10, CASE WHEN $4 IN ('completed', 'failed') THEN NOW() ELSE NULL END)
             ON CONFLICT (id) DO UPDATE SET
               status = EXCLUDED.status,
               result = EXCLUDED.result,
@@ -48,6 +49,7 @@ async def _insert_research_run(
             data_source,
             data_hash,
             error,
+            user_id,
         )
     finally:
         await conn.close()
@@ -63,11 +65,12 @@ def persist_research_run(
     data_source: str,
     data_hash: Optional[str] = None,
     error: Optional[str] = None,
+    user_id: str = "default",
 ) -> None:
-    """Persist a run from a synchronous FastAPI endpoint."""
+    """Persist a run from a synchronous FastAPI endpoint, scoped to the owning user."""
     import asyncio
 
-    asyncio.run(_insert_research_run(run_id, signal_id, run_type, status, parameters, result, data_source, data_hash, error))
+    asyncio.run(_insert_research_run(run_id, signal_id, run_type, status, parameters, result, data_source, data_hash, error, user_id))
 
 
 def utc_run_id(prefix: str) -> str:
@@ -81,7 +84,7 @@ def dataframe_hash(data: Any) -> str:
     return hashlib.sha256(data.to_csv().encode("utf-8")).hexdigest()
 
 
-async def _list_signals() -> list[dict[str, Any]]:
+async def _list_signals(user_id: str = "default") -> list[dict[str, Any]]:
     import asyncpg
 
     database_url = os.environ.get("DATABASE_URL")
@@ -91,20 +94,20 @@ async def _list_signals() -> list[dict[str, Any]]:
     try:
         rows = await conn.fetch(
             "SELECT id, name, code, category, description, formula, status, metrics, created_at, updated_at FROM quant_signals WHERE user_id = $1 ORDER BY created_at DESC",
-            "default",
+            user_id,
         )
         return [dict(row) for row in rows]
     finally:
         await conn.close()
 
 
-def list_signals() -> list[dict[str, Any]]:
+def list_signals(user_id: str = "default") -> list[dict[str, Any]]:
     import asyncio
 
-    return asyncio.run(_list_signals())
+    return asyncio.run(_list_signals(user_id))
 
 
-async def _upsert_signal(signal: dict[str, Any]) -> None:
+async def _upsert_signal(signal: dict[str, Any], user_id: str = "default") -> None:
     import asyncpg
 
     database_url = os.environ.get("DATABASE_URL")
@@ -114,23 +117,24 @@ async def _upsert_signal(signal: dict[str, Any]) -> None:
     try:
         await conn.execute(
             """
-            INSERT INTO quant_signals (id, name, code, category, description, formula, status, metrics)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+            INSERT INTO quant_signals (id, name, code, category, description, formula, status, metrics, user_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
             ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, metrics = EXCLUDED.metrics, updated_at = NOW()
+              WHERE quant_signals.user_id = EXCLUDED.user_id
             """,
-            signal["id"], signal["name"], signal["code"], signal["category"], signal["description"], signal["formula"], signal["status"], json.dumps(signal.get("metrics"), default=str) if signal.get("metrics") is not None else None,
+            signal["id"], signal["name"], signal["code"], signal["category"], signal["description"], signal["formula"], signal["status"], json.dumps(signal.get("metrics"), default=str) if signal.get("metrics") is not None else None, user_id,
         )
     finally:
         await conn.close()
 
 
-def upsert_signal(signal: dict[str, Any]) -> None:
+def upsert_signal(signal: dict[str, Any], user_id: str = "default") -> None:
     import asyncio
 
-    asyncio.run(_upsert_signal(signal))
+    asyncio.run(_upsert_signal(signal, user_id))
 
 
-async def _list_research_runs(signal_id: Optional[str] = None) -> list[dict[str, Any]]:
+async def _list_research_runs(signal_id: Optional[str] = None, user_id: str = "default") -> list[dict[str, Any]]:
     import asyncpg
 
     database_url = os.environ.get("DATABASE_URL")
@@ -139,18 +143,18 @@ async def _list_research_runs(signal_id: Optional[str] = None) -> list[dict[str,
     conn = await asyncpg.connect(database_url)
     try:
         if signal_id:
-            rows = await conn.fetch("SELECT * FROM quant_research_runs WHERE user_id = $1 AND signal_id = $2 ORDER BY started_at DESC", "default", signal_id)
+            rows = await conn.fetch("SELECT * FROM quant_research_runs WHERE user_id = $1 AND signal_id = $2 ORDER BY started_at DESC", user_id, signal_id)
         else:
-            rows = await conn.fetch("SELECT * FROM quant_research_runs WHERE user_id = $1 ORDER BY started_at DESC", "default")
+            rows = await conn.fetch("SELECT * FROM quant_research_runs WHERE user_id = $1 ORDER BY started_at DESC", user_id)
         return [dict(row) for row in rows]
     finally:
         await conn.close()
 
 
-def list_research_runs(signal_id: Optional[str] = None) -> list[dict[str, Any]]:
+def list_research_runs(signal_id: Optional[str] = None, user_id: str = "default") -> list[dict[str, Any]]:
     import asyncio
 
-    return asyncio.run(_list_research_runs(signal_id))
+    return asyncio.run(_list_research_runs(signal_id, user_id))
 
 
 async def _update_research_run(run_id: str, status: str, result: Optional[dict[str, Any]] = None, error: Optional[str] = None, data_hash: Optional[str] = None) -> None:
