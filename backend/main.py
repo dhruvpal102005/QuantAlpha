@@ -187,8 +187,11 @@ def get_datasets():
 def _run_validation_job(run_id: str, req: SignalValidateRequest) -> None:
     try:
         update_research_run(run_id, "running", {"progress": 10, "stage": "Fetching verified OHLCV"})
-        result = validate_signal(req)
-        update_research_run(run_id, "completed", {"progress": 100, "stage": "Complete", "result": result})
+        result, data_hash = _compute_validation(req)
+        update_research_run(run_id, "completed", {"progress": 100, "stage": "Complete", "result": result}, data_hash=data_hash)
+    except HTTPException as exc:
+        logger.warning("Validation job rejected: %s", exc.detail)
+        update_research_run(run_id, "failed", {"progress": 100, "stage": "Failed"}, str(exc.detail))
     except Exception as exc:
         logger.exception("Validation job failed")
         update_research_run(run_id, "failed", {"progress": 100, "stage": "Failed"}, str(exc))
@@ -197,16 +200,46 @@ def _run_validation_job(run_id: str, req: SignalValidateRequest) -> None:
 @app.post("/api/v1/signals/validate/start")
 def start_validation(req: SignalValidateRequest):
     run_id = utc_run_id("validation")
-    persist_research_run(run_id, req.signalId, "validation", "queued", req.model_dump(), {"progress": 0, "stage": "Queued"}, "Yahoo Finance verified OHLCV")
+    # Guard against duplicate concurrent jobs for the same signal + configuration.
+    try:
+        existing = list_research_runs(req.signalId)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Persistent research store unavailable") from exc
+    params = req.model_dump()
+    for run in existing:
+        run_params = run.get("parameters")
+        if isinstance(run_params, str):
+            try:
+                run_params = json.loads(run_params)
+            except json.JSONDecodeError:
+                run_params = None
+        if run.get("status") in ("queued", "running") and run_params == params:
+            return {"run_id": run["id"], "status": run["status"], "deduplicated": True}
+
+    persist_research_run(run_id, req.signalId, "validation", "queued", params, {"progress": 0, "stage": "Queued"}, "Yahoo Finance verified OHLCV")
     job_executor.submit(_run_validation_job, run_id, req)
     return {"run_id": run_id, "status": "queued"}
 
 
 @app.post("/api/v1/signals/validate")
 def validate_signal(req: SignalValidateRequest):
-    """
-    Executes REAL Purged K-Fold Cross-Validation with CPCV, PBO, DSR on a candidate signal.
-    """
+    """Executes REAL Purged K-Fold CV (CPCV + PBO + DSR) synchronously and persists one run."""
+    run_id = utc_run_id("validation")
+    persist_research_run(run_id, req.signalId, "validation", "running", req.model_dump(), {"progress": 0, "stage": "Running"}, "Yahoo Finance verified OHLCV")
+    try:
+        result, data_hash = _compute_validation(req)
+    except HTTPException as exc:
+        update_research_run(run_id, "failed", {"progress": 100, "stage": "Failed"}, str(exc.detail))
+        raise
+    except Exception as exc:
+        update_research_run(run_id, "failed", {"progress": 100, "stage": "Failed"}, str(exc))
+        raise HTTPException(status_code=500, detail=f"Validation pipeline error: {exc}") from exc
+    update_research_run(run_id, "completed", {"progress": 100, "stage": "Complete", "result": result}, data_hash=data_hash)
+    return result
+
+
+def _compute_validation(req: SignalValidateRequest) -> tuple[dict, str]:
+    """Pure validation computation against verified OHLCV. Returns (result, data_hash); persistence handled by callers."""
     try:
         candidate = next((s for s in list_signals() if s["id"] == req.signalId), None)
     except Exception as exc:
@@ -215,95 +248,84 @@ def validate_signal(req: SignalValidateRequest):
     if not candidate:
         raise HTTPException(status_code=404, detail=f"Signal '{req.signalId}' was not found")
 
-    try:
-        import numpy as np
-        import pandas as pd
-        from data_loader import fetch_historical_ohlcv
-        from signal_factory import _build_t1_from_barrier_labels
+    import numpy as np
+    import pandas as pd
+    from data_loader import fetch_historical_ohlcv
+    from signal_factory import _build_t1_from_barrier_labels
 
-        # Fetch real NSE data for this signal's validation
-        data = fetch_historical_ohlcv(req.ticker, req.startDate, req.endDate)
-        prices = data["Close"]
+    # Fetch real NSE data for this signal's validation
+    data = fetch_historical_ohlcv(req.ticker, req.startDate, req.endDate)
+    if data is None or getattr(data, "empty", True) or "Close" not in data:
+        raise HTTPException(status_code=422, detail=f"No verified OHLCV returned for '{req.ticker}' in the requested range")
+    prices = data["Close"].dropna()
+    if len(prices) < 100:
+        raise HTTPException(status_code=422, detail=f"Insufficient verified history for '{req.ticker}': {len(prices)} rows (need >= 100)")
 
-        # Triple-barrier labels → real t1 Series
-        labeler = TripleBarrierLabeler(
-            prices=prices,
-            profit_target_pct=0.015,
-            stop_loss_pct=0.010,
-            max_holding_periods=5,
-            volatility_adjusted=True,
-        )
-        labels_df = labeler.generate_labels()
-        t1 = _build_t1_from_barrier_labels(labels_df)
+    # Triple-barrier labels → real t1 Series
+    labeler = TripleBarrierLabeler(
+        prices=prices,
+        profit_target_pct=0.015,
+        stop_loss_pct=0.010,
+        max_holding_periods=5,
+        volatility_adjusted=True,
+    )
+    labels_df = labeler.generate_labels()
+    t1 = _build_t1_from_barrier_labels(labels_df)
 
-        # Strategy returns: simple EMA crossover on NSE
-        ema20 = prices.ewm(span=20, adjust=False).mean()
-        ema50 = prices.ewm(span=50, adjust=False).mean()
-        sig = np.where(ema20 > ema50, 1.0, -0.2)
-        signal = pd.Series(sig, index=prices.index).shift(1).fillna(0.0)
-        returns = (signal * prices.pct_change().fillna(0.0)).dropna()
+    # Strategy returns: simple EMA crossover on NSE
+    ema20 = prices.ewm(span=20, adjust=False).mean()
+    ema50 = prices.ewm(span=50, adjust=False).mean()
+    sig = np.where(ema20 > ema50, 1.0, -0.2)
+    signal = pd.Series(sig, index=prices.index).shift(1).fillna(0.0)
+    returns = (signal * prices.pct_change().fillna(0.0)).dropna()
 
-        # Canonical CPCV + PBO + DSR pipeline — no heuristics
-        validation_result = validate_strategy_pipeline(
-            returns=returns,
-            t1=t1,
-            n_trials=req.nTrials,
-            alpha=0.05,
-            pct_embargo=req.embargoPct,
-        )
+    # Canonical CPCV + PBO + DSR pipeline — no heuristics
+    validation_result = validate_strategy_pipeline(
+        returns=returns,
+        t1=t1,
+        n_trials=req.nTrials,
+        alpha=0.05,
+        pct_embargo=req.embargoPct,
+    )
 
-        val_status = validation_result["validation_status"]
-        pbo_res = validation_result["pbo"]
-        dsr_res = validation_result["dsr"]
-        sharpe = validation_result.get("sharpe_ratio")
-        n_paths = len(validation_result.get("cpcv_paths", []))
+    val_status = validation_result["validation_status"]
+    pbo_res = validation_result["pbo"]
+    dsr_res = validation_result["dsr"]
+    sharpe = validation_result.get("sharpe_ratio")
+    n_paths = len(validation_result.get("cpcv_paths", []))
 
-        passed = val_status == "PASSED"
+    passed = val_status == "PASSED"
 
-        # Update the persisted signal status only after the real validation completes.
-        validated_item = {
-            **candidate,
-            "id": f"val-{int(datetime.utcnow().timestamp())}",
-            "code": f"val_{candidate.get('code', 'sig')[4:] or candidate.get('code', 'sig')}",
-            "status": "Passed Validation" if passed else "Rejected",
-            "dsr": round(dsr_res["dsr"], 4) if dsr_res.get("dsr") is not None else None,
-            "pbo": round(pbo_res["pbo"], 4) if pbo_res.get("pbo") is not None else None,
-            "oosSharpe": round(sharpe, 3) if sharpe is not None else None,
-            "metrics": {"oosSharpe": sharpe, "dsr": dsr_res.get("dsr"), "pbo": pbo_res.get("pbo")},
-            "_mode": "RESEARCH",
-        }
-        upsert_signal(validated_item)
+    # Update the persisted signal status only after the real validation completes.
+    validated_item = {
+        **candidate,
+        "id": f"val-{int(datetime.utcnow().timestamp())}",
+        "code": f"val_{candidate.get('code', 'sig')[4:] or candidate.get('code', 'sig')}",
+        "status": "Passed Validation" if passed else "Rejected",
+        "dsr": round(dsr_res["dsr"], 4) if dsr_res.get("dsr") is not None else None,
+        "pbo": round(pbo_res["pbo"], 4) if pbo_res.get("pbo") is not None else None,
+        "oosSharpe": round(sharpe, 3) if sharpe is not None else None,
+        "metrics": {"oosSharpe": sharpe, "dsr": dsr_res.get("dsr"), "pbo": pbo_res.get("pbo")},
+        "_mode": "RESEARCH",
+    }
+    upsert_signal(validated_item)
 
-        result = {
-            "status": val_status,
-            "signal": validated_item,
-            "validation_method": "CPCV (N=6, k=2, 15 paths) + PBO + DSR + BHY",
-            "validation_details": {
-                "dsr": dsr_res.get("dsr"),
-                "dsr_status": dsr_res.get("status"),
-                "pbo": pbo_res.get("pbo"),
-                "pbo_status": pbo_res.get("status"),
-                "sharpe_ratio": sharpe,
-                "n_cpcv_paths": n_paths,
-                "n_samples": validation_result.get("n_samples"),
-                "mode": "RESEARCH (verified NSE data)",
-            },
-        }
-        persist_research_run(
-            run_id=utc_run_id("validation"),
-            signal_id=req.signalId,
-            run_type="validation",
-            status="completed",
-            parameters=req.model_dump(),
-            result=result,
-            data_source="Yahoo Finance verified OHLCV",
-            data_hash=dataframe_hash(data),
-        )
-        return result
-
-    except Exception as e:
-        logger.error(f"Validation error: {e}")
-        raise HTTPException(status_code=500, detail=f"Validation pipeline error: {str(e)}")
+    result = {
+        "status": val_status,
+        "signal": validated_item,
+        "validation_method": "CPCV (N=6, k=2, 15 paths) + PBO + DSR + BHY",
+        "validation_details": {
+            "dsr": dsr_res.get("dsr"),
+            "dsr_status": dsr_res.get("status"),
+            "pbo": pbo_res.get("pbo"),
+            "pbo_status": pbo_res.get("status"),
+            "sharpe_ratio": sharpe,
+            "n_cpcv_paths": n_paths,
+            "n_samples": validation_result.get("n_samples"),
+            "mode": "RESEARCH (verified NSE data)",
+        },
+    }
+    return result, dataframe_hash(data)
 
 
 @app.post("/api/v1/backtest/real")
